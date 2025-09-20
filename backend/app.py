@@ -5,9 +5,8 @@ import uuid
 import json
 from datetime import datetime
 import PyPDF2
-import magic
 from io import BytesIO
-from search_engine import MedicalSearchEngine
+from dynamodb_service import DynamoDBService
 
 app = Flask(__name__)
 
@@ -15,11 +14,8 @@ app = Flask(__name__)
 s3 = boto3.client("s3")
 BUCKET = "echomind-pdf-storage"
 
-# Initialize search engine
-search_engine = MedicalSearchEngine()
-
-# In-memory storage (replace with database)
-documents = {}
+# DynamoDB service
+db_service = DynamoDBService()
 
 # Document categories
 CATEGORIES = [
@@ -32,12 +28,20 @@ def validate_pdf(file_content):
     if len(file_content) > 50 * 1024 * 1024:  # 50MB limit
         return False, "File too large (>50MB)"
     
+    # Check if content starts with PDF header
+    if not file_content.startswith(b'%PDF'):
+        return False, "File is not a PDF"
+    
+    # Optional: Use magic library if available
     try:
+        import magic
         file_type = magic.from_buffer(file_content, mime=True)
         if file_type != 'application/pdf':
             return False, "File is not a PDF"
-    except:
-        return False, "Unable to determine file type"
+    except ImportError:
+        print("Warning: python-magic not available, using basic PDF validation")
+    except Exception as e:
+        print(f"Warning: Magic validation failed: {e}")
     
     return True, "Valid"
 
@@ -55,13 +59,21 @@ def get_categories():
 
 @app.route('/api/documents/upload', methods=['POST'])
 def upload_document():
+    print(f"📤 Upload request received")
+    print(f"Files: {list(request.files.keys())}")
+    print(f"Form data: {dict(request.form)}")
+    
     try:
         # Check if file is present
         if 'file' not in request.files:
+            print("❌ No file in request")
             return jsonify({"error": "No file provided"}), 400
         
         file = request.files['file']
+        print(f"📄 File: {file.filename}, Content-Type: {file.content_type}")
+        
         if file.filename == '':
+            print("❌ Empty filename")
             return jsonify({"error": "No file selected"}), 400
         
         # Get categories
@@ -80,9 +92,12 @@ def upload_document():
         file_content = file.read()
         
         # Validate PDF
+        print(f"🔍 Validating PDF: {len(file_content)} bytes")
         is_valid, message = validate_pdf(file_content)
         if not is_valid:
+            print(f"❌ PDF validation failed: {message}")
             return jsonify({"error": message}), 400
+        print("✅ PDF validation passed")
         
         # Generate unique ID and S3 key
         doc_id = str(uuid.uuid4())
@@ -90,12 +105,14 @@ def upload_document():
         content_hash = calculate_hash(file_content)
         
         # Upload to S3
+        print(f"☁️  Uploading to S3: {s3_key}")
         s3.put_object(
             Bucket=BUCKET,
             Key=s3_key,
             Body=file_content,
             ContentType='application/pdf'
         )
+        print("✅ S3 upload successful")
         
         # Create metadata
         metadata = {
@@ -111,8 +128,18 @@ def upload_document():
             "processed": False
         }
         
-        # Store metadata
-        documents[doc_id] = metadata
+        # Store metadata in DynamoDB
+        if not db_service.save_document(metadata):
+            return jsonify({"error": "Failed to save document metadata"}), 500
+        
+        # Refresh search index for new document
+        try:
+            from document_search_service import DocumentSearchService
+            search_service = DocumentSearchService()
+            search_service.refresh_index()
+            print(f"✅ Search index refreshed after uploading {file.filename}")
+        except Exception as e:
+            print(f"⚠️  Warning: Failed to refresh search index: {e}")
         
         return jsonify({
             "success": True,
@@ -122,25 +149,31 @@ def upload_document():
         })
         
     except Exception as e:
+        print(f"❌ Upload error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Upload failed: {str(e)}"}), 500
 
 @app.route('/api/documents', methods=['GET'])
 def list_documents():
+    documents = db_service.list_documents()
     return jsonify({
-        "documents": list(documents.values()),
+        "documents": documents,
         "total": len(documents)
     })
 
 @app.route('/api/documents/<document_id>', methods=['GET'])
 def get_document(document_id):
-    if document_id not in documents:
+    document = db_service.get_document(document_id)
+    if not document:
         return jsonify({"error": "Document not found"}), 404
     
-    return jsonify(documents[document_id])
+    return jsonify(document)
 
 @app.route('/api/documents/<document_id>/categories', methods=['PUT'])
 def update_categories(document_id):
-    if document_id not in documents:
+    document = db_service.get_document(document_id)
+    if not document:
         return jsonify({"error": "Document not found"}), 404
     
     try:
@@ -152,28 +185,31 @@ def update_categories(document_id):
             if cat not in CATEGORIES:
                 return jsonify({"error": f"Invalid category: {cat}"}), 400
         
-        # Update categories
-        documents[document_id]['categories'] = categories
-        
-        return jsonify({"message": "Categories updated successfully"})
+        # Update categories in DynamoDB
+        if db_service.update_document(document_id, {'categories': categories}):
+            return jsonify({"message": "Categories updated successfully"})
+        else:
+            return jsonify({"error": "Failed to update categories"}), 500
         
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
 @app.route('/api/documents/<document_id>', methods=['DELETE'])
 def delete_document(document_id):
-    if document_id not in documents:
+    document = db_service.get_document(document_id)
+    if not document:
         return jsonify({"error": "Document not found"}), 404
     
     try:
         # Delete from S3
-        s3_key = documents[document_id]['s3_key']
+        s3_key = document['s3_key']
         s3.delete_object(Bucket=BUCKET, Key=s3_key)
         
-        # Remove from memory
-        del documents[document_id]
-        
-        return jsonify({"message": "Document deleted successfully"})
+        # Delete from DynamoDB
+        if db_service.delete_document(document_id):
+            return jsonify({"message": "Document deleted successfully"})
+        else:
+            return jsonify({"error": "Failed to delete document metadata"}), 500
         
     except Exception as e:
         return jsonify({"error": f"Delete failed: {str(e)}"}), 500
@@ -181,27 +217,52 @@ def delete_document(document_id):
 # Search Engine Endpoints
 @app.route('/api/search/query', methods=['POST'])
 def search_query():
-    """Process natural language search query"""
+    """Process natural language search query with enhanced medical understanding"""
     try:
         data = request.get_json()
-        query = data.get('query', '')
+        query_text = data.get('query', '').strip()
         
-        if not query:
+        if not query_text:
             return jsonify({'error': 'Query is required'}), 400
         
-        # Process query using search engine
-        processed_query = search_engine.process_query(query)
+        from document_search_service import DocumentSearchService
+        search_service = DocumentSearchService()
         
-        if processed_query.get('status') == 'error':
-            return jsonify(processed_query), 500
+        # Enhanced medical entity extraction
+        medical_conditions = ['diabetes', 'hypertension', 'heart disease', 'stroke', 'cancer', 'pneumonia']
+        medications = ['insulin', 'metformin', 'lisinopril', 'aspirin', 'warfarin']
+        procedures = ['surgery', 'biopsy', 'catheterization', 'endoscopy']
         
-        # Search documents
-        search_results = search_engine.search_documents(processed_query)
+        found_conditions = [term for term in medical_conditions if term in query_text.lower()]
+        found_medications = [term for term in medications if term in query_text.lower()]
+        found_procedures = [term for term in procedures if term in query_text.lower()]
+        
+        # Search with original query terms
+        query_words = [word.strip() for word in query_text.split() if len(word.strip()) > 2]
+        
+        results = search_service.search_documents(
+            query_terms=query_words,
+            expanded_query=query_text,
+            medical_entities={
+                'conditions': found_conditions,
+                'medications': found_medications,
+                'procedures': found_procedures
+            }
+        )
         
         return jsonify({
-            'query_analysis': processed_query,
-            'results': search_results,
-            'total_results': len(search_results)
+            'query_analysis': {
+                'original_query': query_text,
+                'query_terms': query_words,
+                'medical_entities': {
+                    'conditions': found_conditions,
+                    'medications': found_medications,
+                    'procedures': found_procedures
+                },
+                'intent': 'medical_search'
+            },
+            'results': results,
+            'total_results': len(results)
         })
     
     except Exception as e:
@@ -222,6 +283,24 @@ def get_suggestions():
         ]
         
         return jsonify({'suggestions': suggestions[:5]})
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/search/index-status', methods=['GET'])
+def get_index_status():
+    """Get document index status"""
+    try:
+        from document_search_service import DocumentSearchService
+        search_service = DocumentSearchService()
+        stats = search_service.get_index_stats()
+        
+        return jsonify({
+            'indexed_documents': stats['total_documents'],
+            'total_content_length': stats['total_content_length'],
+            'average_document_size': stats['average_document_size'],
+            'last_updated': stats['last_updated']
+        })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
