@@ -3,8 +3,10 @@ import os, json, boto3
 from botocore.config import Config
 
 # Use on-demand (serverless) Bedrock. No Provisioned Throughput / ModelUnits.
-BEDROCK_REGION = os.getenv("BEDROCK_REGION", "ap-southeast-1")  # Tokyo recommended
-MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "amazon.nova-pro-v1:0")  # Nova Pro
+BEDROCK_REGION = os.getenv("BEDROCK_REGION", "us-east-1")  # Nova Pro available in us-east-1
+# Try Nova Pro first, fallback to Claude if needed
+MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "us.amazon.nova-pro-v1:0")  # Nova Pro inference profile
+# Alternative: "anthropic.claude-3-sonnet-20240229-v1:0"
 
 def get_bedrock_client():
     return boto3.client("bedrock-runtime", config=Config(region_name=BEDROCK_REGION))
