@@ -1,72 +1,180 @@
 # AI-Powered Intelligent Medical Document Query Tool
 
-A comprehensive system for uploading, processing, and querying medical PDF documents using AI.
+Transform unstructured medical PDFs into an intelligent, searchable knowledge base. Healthcare professionals can ask natural language questions and receive precise, contextually relevant answers with source citations.
 
-## Architecture
+## 🏥 Problem Statement
 
-- **Frontend**: Streamlit web interface (`enhanced_app.py`)
-- **Backend**: Flask API for document management (`backend/app.py`)
-- **Storage**: AWS S3 for PDF storage
-- **Processing**: PDF text extraction and categorization
+Healthcare professionals in Malaysia struggle with:
+- **Time Waste**: 2-3 hours daily manually searching medical PDFs
+- **Information Loss**: Critical details buried in complex PDF structures
+- **No Knowledge Synthesis**: Cannot leverage collective institutional knowledge
 
-## Quick Start
+## 🚀 Solution
+
+AI-powered query tool that enables:
+- Natural language search across all medical documents
+- Instant answers with source attribution
+- ChatGPT-like interface for medical professionals
+- Intelligent document processing and indexing
+
+## 🏗️ Architecture
+
+### Backend (Flask API)
+- **Document Processing**: PDF extraction with OCR, table detection, medical entity recognition
+- **AI Search**: Vector similarity search using OpenSearch with medical embeddings
+- **Answer Generation**: Google Gemini API for natural language responses
+- **Storage**: AWS S3 for PDFs, OpenSearch for searchable chunks
+
+### Frontend (React TypeScript)
+- **Document Management**: Upload, categorize, view, and delete medical PDFs
+- **AI Search Assistant**: Chat-like interface for natural language queries
+- **Source Attribution**: Direct links to relevant PDF sections with relevance scores
+
+### Cloud Infrastructure
+- **AWS S3**: Secure PDF storage with presigned URLs
+- **OpenSearch**: Vector search engine for semantic similarity
+- **Google Gemini**: AI language model for answer synthesis
+
+## 🛠️ Quick Start
+
+### Prerequisites
+- Node.js 16+
+- Python 3.9+
+- AWS CLI configured
+- Google Gemini API key
 
 ### 1. Backend Setup
 ```bash
 cd backend
 pip install -r requirements.txt
+
+# Create .env file with required environment variables
+cp .env.example .env  # or create manually
+# Edit .env file and set the following variables:
+# AWS_REGION=ap-southeast-1
+# OPENAI_API_KEY=your-google-gemini-api-key
+# OPENSEARCH_ENDPOINT=https://your-opensearch-domain.amazonaws.com
+# OPENSEARCH_INDEX=medical_docs
+# S3_BUCKET=your-pdf-storage-bucket
+# DYNAMODB_CHAT_TABLE=chat-history
+
 python app.py
 ```
 
 ### 2. Frontend Setup
 ```bash
-pip install -r frontend_requirements.txt
-streamlit run enhanced_app.py
+cd frontend
+npm install
+npm start
 ```
 
-### 3. Access
-- Frontend: http://localhost:8501
-- Backend API: http://localhost:8000
-- API Docs: http://localhost:8000/health
+### 3. Access Application
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+- **Health Check**: http://localhost:8000/health
 
-## Features
+## 📋 Features
 
-✅ **Unit 1: Document Management**
-- PDF upload and validation (50MB limit)
-- Document categorization
-- S3 storage integration
-- Document inventory management
-- RESTful API
+### ✅ Document Management
+- Bulk PDF upload with drag-and-drop
+- Document categorization (Clinical Guidelines, Patient Records, Research Papers, etc.)
+- PDF viewing with presigned URLs
+- Document deletion with automatic index cleanup
+- File validation and metadata extraction
 
-🚧 **Coming Soon**
-- Unit 2: Search Engine & Query Processing
-- Unit 3: Results & Information Extraction
-- Unit 4: Chat Interface Enhancement
-- Unit 5: Analytics & Intelligence
-- Unit 6: Security & Access Control
-- Unit 7: System Operations
+### ✅ AI Search Assistant
+- Natural language query processing
+- Semantic search across all documents
+- Medical entity recognition (drugs, dosages, conditions, procedures)
+- Source attribution with relevance scores
+- Context-aware answer generation
+- Medical abbreviation expansion
 
-## API Endpoints
+### ✅ Advanced Processing
+- Multi-modal PDF extraction (text, tables, images)
+- OCR for scanned documents
+- Medical-specific chunking strategies
+- Vector embeddings optimized for medical content
+- Intelligent document structure preservation
 
-- `POST /api/documents/upload` - Upload PDF
-- `GET /api/documents` - List documents
-- `GET /api/categories` - Get categories
-- `GET /health` - Health check
+## 🔧 Configuration
 
-## Usage
+### Environment Variables (.env)
+Create a `.env` file in the `backend/` directory with these variables:
+```bash
+AWS_REGION=ap-southeast-1
+OPENAI_API_KEY=your-google-gemini-api-key
+OPENSEARCH_ENDPOINT=https://your-opensearch-domain.amazonaws.com
+OPENSEARCH_INDEX=medical_docs
+S3_BUCKET=your-pdf-storage-bucket
+DYNAMODB_CHAT_TABLE=chat-history
+```
 
-1. Start the backend API
-2. Launch the Streamlit frontend
-3. Upload PDF documents via the sidebar
-4. Select appropriate categories
-5. View document inventory
-6. Query documents (coming in Unit 2)
-Great Malaysia AI Hackathon 2025
+### Supported Document Categories
+- `patient_records` - Patient charts, medical histories
+- `clinical_guidelines` - Treatment protocols, best practices
+- `research_papers` - Clinical studies, medical literature
+- `lab_results` - Laboratory reports, diagnostic results
+- `medication_schedules` - Drug information, prescriptions
 
-# Development
-## To run frontend
-Install StreamLit
-```pip install streamlit```
+## 🎯 Usage Examples
 
-Run Streamlit
-```streamlit run app.py```
+### Document Upload
+1. Navigate to Document Management
+2. Click "Upload Documents"
+3. Select multiple PDFs
+4. Choose appropriate categories
+5. Upload and wait for processing
+
+### AI Queries
+```
+"What are the contraindications for metformin?"
+"Describe the treatment protocol for COVID-19 patients with diabetes"
+"What is the recommended dosage for insulin in elderly patients?"
+"List the side effects of warfarin and monitoring requirements"
+```
+
+## 🚀 AWS Deployment
+
+### Step 1: OpenSearch Service
+```bash
+cd deployment
+./create-opensearch.sh
+```
+
+### Step 2: Backend (Elastic Beanstalk)
+```bash
+./eb-deploy.sh
+```
+
+### Step 3: Frontend (S3 + CloudFront)
+```bash
+npm run build
+# Upload build/ to S3 bucket
+# Configure CloudFront distribution
+```
+
+## 📊 Technical Specifications
+
+- **PDF Processing**: PyMuPDF, pdfplumber, Tesseract OCR
+- **AI Models**: Google Gemini 1.5 Flash, SentenceTransformers
+- **Search Engine**: OpenSearch with vector similarity
+- **Frontend**: React 18, TypeScript, Material-UI
+- **Backend**: Flask, Python 3.9+
+- **Cloud**: AWS S3, OpenSearch Service, Elastic Beanstalk
+
+## 🔒 Security Features
+
+- Presigned URLs for secure PDF access
+- Environment variable configuration
+- AWS IAM role-based permissions
+- HTTPS enforcement
+- Input validation and sanitization
+
+## 🤝 Contributing
+
+Built for the Great Malaysia AI Hackathon 2025. This tool addresses real healthcare challenges by making medical knowledge instantly accessible through AI-powered natural language search.
+
+## 📄 License
+
+This project is developed for healthcare innovation and educational purposes.
