@@ -1,0 +1,25 @@
+[
+  {
+    "Rules": [
+      {
+        "ResourceType": "index",
+        "Resource": [
+          "index/bedrock-knowledge-base-57cuq7/medical_docs",
+          "index/bedrock-knowledge-base-57cuq7/medical_docs*"
+        ],
+        "Permission": [
+          "aoss:CreateIndex",
+          "aoss:DeleteIndex",
+          "aoss:UpdateIndex",
+          "aoss:DescribeIndex",
+          "aoss:ReadDocument",
+          "aoss:WriteDocument"
+        ]
+      }
+    ],
+    "Principal": [
+      "arn:aws:iam::994918905615:user/hy"
+    ]
+  }
+]
+
